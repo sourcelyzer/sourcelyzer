@@ -1,0 +1,2 @@
+class RestResourceException(Exception):
+    pass
