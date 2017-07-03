@@ -104,3 +104,6 @@ ENV/
 
 # vim
 .*.swp
+
+# test generated stuff
+tests/rest/v1/test.db
