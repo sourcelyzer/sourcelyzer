@@ -1,8 +1,9 @@
 from sourcelyzer.logger import get_logger
 
-from sourcelyzer.rest.v1 import HomePage, ProjectResource, UserResource, AuthCommand
-from sourcelyzer.rest.v1 import json_error_output, json_processor
-from sourcelyzer.rest.plugins import SAPlugin
+from sourcelyzer.rest.v1 import HomePage, ProjectResource, UserResource, AuthCommand, PluginsResource
+from sourcelyzer.rest.utils.json import json_error_output, json_processor
+from sourcelyzer.rest.plugins.sqlalchemy import SAPlugin
+from sourcelyzer.rest.plugins.plugin_loader import PluginLoaderPlugin
 from sourcelyzer.rest.tools import SATool
 
 from sqlalchemy import create_engine
@@ -38,7 +39,7 @@ class ServerThread(threading.Thread):
         if not os.path.exists(self.sessiondir):
             os.makedirs(self.sessiondir)
 
-
+        PluginLoaderPlugin(cherrypy.engine, self._config['sourcelyzer.plugin_dir']).subscribe()
         SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
 
         cherrypy.tools.db = SATool()
@@ -70,19 +71,19 @@ class ServerThread(threading.Thread):
         cherrypy.tree.mount(UserResource(), '/rest/v1/users', {'/': {
             'error_page.default': json_error_output
         }})
+        cherrypy.tree.mount(PluginsResource(), '/rest/v1/plugins')
 
         cherrypy.tree.mount(AuthCommand(), '/rest/v1/commands/authenticate', {'/login': {
             'error_page.default': json_error_output
         }})
 
-
         print('starting server at http://%s:%s' % (
             self._config['sourcelyzer.server.listen_addr'],
             self._config['sourcelyzer.server.listen_port']
-        ), flush = True)
+        ), flush=True)
         cherrypy.engine.start()
         cherrypy.engine.block()
-        
+
     def stop(self):
         cherrypy.engine.stop()
         cherrypy.engine.exit()

@@ -4,7 +4,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 class SATool(cherrypy.Tool):
     def __init__(self):
-        cherrypy.Tool.__init__(self, 'on_start_resource', self.bind_session, priority=20)
+        cherrypy.Tool.__init__(self, 'on_start_resource', self.bind_session, priority=19)
 
     def _setup(self):
         cherrypy.Tool._setup(self)

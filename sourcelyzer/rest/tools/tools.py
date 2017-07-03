@@ -1,12 +1,25 @@
 import cherrypy
-from sourcelyzer.rest.utils import check_auth_token
+from sourcelyzer.rest.utils.auth import verify_auth_token
+
+def check_authentication(session, auth_token):
+    if 'user' not in session:
+        raise cherrypy.HTTPError(401)
+
+    print('check authentication for user %s' % session['user'].username)
+
+    if not auth_token:
+        raise cherrypy.HTTPError(401)
+
+
+def check_required_param(paramName, params):
+    if paramName not in params:
+        raise cherrypy.HTTPError(400, 'Missing parameter %s' % paramName)
 
 
 def RequiredParam(paramName):
     def decorator(f):
         def wrapper(*args, **kwargs):
-            if paramName not in cherrypy.request.params:
-                raise cherrypy.HTTPError(400, 'Missing parameter %s' % paramName)
+            check_required_param(paramName, cherrypy.request.params)
             return f(*args, **kwargs)
         return wrapper
     return decorator
@@ -14,24 +27,7 @@ def RequiredParam(paramName):
 
 def RequireAuthentication(f):
     def wrapper(*args, **kwargs):
-        if 'user' not in cherrypy.session:
-            raise cherrypy.HTTPError(401)
-
-        if 'secret' not in cherrypy.session['user']:
-            raise cherrypy.HTTPError(401)
-
-        if not cherrypy.session['user']['secret']:
-            raise cherrypy.HTTPError(401)
-
-        if not 'Authorization' in cherrypy.request.headers:
-            raise cherrypy.HTTPError(401)
-
-        secret = cherrypy.session['user']['secret']
-        token = cherrypy.request.headers.get('Authorization')
-
-        if not check_auth_token(token, secret, cherrypy.session.id.encode('utf-8')):
-            raise cherrypy.HTTPError(401)
-
+        check_authentication(cherrypy.session, cherrypy.request.headers.get('Authorization', None))
         return f(*args, **kwargs)
 
     return wrapper

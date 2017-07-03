@@ -17,8 +17,9 @@ stuff_to_clean = [
 
 for junk in stuff_to_clean:
     print('Deleting: %s' % junk)
-    if os.path.isdir(junk):
-        shutil.rmtree(junk)
-    else:
-        os.remove(junk)
+    if os.path.exists(junk):
+        if os.path.isdir(junk):
+            shutil.rmtree(junk)
+        else:
+            os.remove(junk)
 

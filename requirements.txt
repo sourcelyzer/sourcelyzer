@@ -1,0 +1,8 @@
+docopt
+colorama
+cherrypy
+requests
+simplejson
+sqlalchemy
+argon2_cffi
+psycopg2

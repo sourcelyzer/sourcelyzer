@@ -8,5 +8,15 @@ setup(name='sourcelyzer',
       author_email='adow@psikon.com',
       license='MIT',
       package=['sourcelyzer'],
-      zip_safe=False
+      zip_safe=False,
+      install_requires=[
+          'docopt',
+          'colorama',
+          'cherrypy',
+          'requests',
+          'simplejson',
+          'sqlalchemy',
+          'argon2_cffi',
+          'psycopg2'
+      ]
 )

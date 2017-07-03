@@ -3,28 +3,6 @@ import simplejson as json
 from sourcelyzer.rest.v1.exceptions import RestResourceException
 from sourcelyzer.rest.tools import RequireAuthentication
 
-def json_processor(entity):
-    print('custom json parser - entity.length: %s' % entity.length)
-    if entity.length == 0 or entity.length == '0':
-        print('HOW ARE YOU NOT HERE?!')
-        cherrypy.serving.request.json = None
-        return
-
-    if not entity.length:
-        raise cherrypy.HTTPError(411)
-
-    with cherrypy.HTTPError.handle(ValueError, 400, 'Invalid JSON Document'):
-        cherrypy.serving.request.json = json.loads(entity.fp.read().decode('utf-8'))
-
-
-def json_error_output(status, message, traceback, version):
-    """
-    Formats cherrypy errors into JSON
-    """
-    response = cherrypy.response
-    response.headers['Content-Type'] = 'application/json'
-    return json.dumps({'status': status, 'message': message, 'traceback': traceback, 'version': version})
-
 class RESTResource():
     """
     Base REST Resource class
@@ -69,14 +47,14 @@ class DBResource(RESTResource):
             try:
                 resid = int(resid)
             except ValueError:
-                raise cherrypy.HTTPError(404, 'Project id %s does not exist' % resid)
+                raise cherrypy.HTTPError(404, 'Object id %s does not exist' % resid)
 
             resource = session.query(self.resource).filter(self.resource.id == resid).first()
 
             if resource:
                 output = resource.toDict()
             else:
-                raise cherrypy.HTTPError(404, 'Project id %s does not exist' % resid)
+                raise cherrypy.HTTPError(404, 'Object id %s does not exist' % resid)
         
         return output
 

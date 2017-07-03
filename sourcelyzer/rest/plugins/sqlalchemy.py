@@ -7,12 +7,16 @@ class SAPlugin(plugins.SimplePlugin):
     def __init__(self, bus, dburi):
         plugins.SimplePlugin.__init__(self, bus)
         self.dburi = dburi
-        self.session = scoped_session(sessionmaker(autoflush=True, autocommit=False))
+
+        engine = create_engine(self.dburi, echo=False)
+        self.session = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
+
+#        self.session = scoped_session(sessionmaker(autoflush=True, autocommit=False))
         self.engine = None
 
     def start(self):
         self.bus.log('Starting DB Session')
-        self.engine = create_engine(self.dburi, echo=False)
+#        self.engine = create_engine(self.dburi, echo=False)
         self.bus.subscribe('bind-session', self.bind)
         self.bus.subscribe('commit-session', self.commit)
 
@@ -26,7 +30,7 @@ class SAPlugin(plugins.SimplePlugin):
             self.engine = None
 
     def bind(self):
-        self.session.configure(bind=self.engine)
+#        self.session.configure(bind=self.engine)
         return self.session
 
     def commit(self):

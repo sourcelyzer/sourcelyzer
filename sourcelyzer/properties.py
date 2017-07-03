@@ -26,8 +26,8 @@ def load_from_file(fn):
     try:
         with open(fn) as f:
             return load_from_str(f.read())
-    except Exception:
-        print('foobar')
+    except Exception as e:
+        raise e
 
 
 
@@ -43,12 +43,12 @@ class Properties():
     def __setitem__(self, key, value):
         raise RuntimeError("Properties objects are read only")
 
-    def __hasitem__(self, key):
+    def __contains__(self, key):
         return key in self._args
 
     def __hash__(self):
         if self._hash == None:
-            self._hash = hash(frozenset(self._dict_items()))
+            self._hash = hash(frozenset(self._args.items()))
         return self._hash
     
     def __repr__(self):
