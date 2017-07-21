@@ -1,6 +1,6 @@
 from sourcelyzer.properties import load_from_file
 from sourcelyzer.cli import outnl, ask_yesno, ask_generic
-from sourcelyzer.dao import Base, User, Settings
+from sourcelyzer.dao import Base, User, Settings, PluginRepository
 from sourcelyzer.utils import user as userutils
 
 from sqlalchemy import create_engine
@@ -84,7 +84,6 @@ any necessary secret tokens.
 
     admin_dao = User(username=admin_user, password=userutils.gen_passwd_hash(admin_password), email=admin_email, is_admin=True)
     session.add(admin_dao)
-    session.commit()
 
     outnl('Creating secrets')
     secret_bytes = os.urandom(256)
@@ -92,6 +91,13 @@ any necessary secret tokens.
     secret_bytes = os.urandom(256)
     setting_dao = Settings(setting_name='sourcelyzer.digest.secret', setting_value=secret_bytes)
     session.add(setting_dao)
+
+    outnl('Initializing Plugins')
+
+    plugin_repo_dao = PluginRepository(name='Sourcelyzer Plugin Repository', url='https://raw.githubusercontent.com/sourcelyzer/slpr/develop/repo')
+    session.add(plugin_repo_dao)
+
+    outnl('Committing changes')
     session.commit()
 
     outnl('Installation complete!')

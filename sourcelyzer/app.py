@@ -1,10 +1,7 @@
 from sourcelyzer.logger import get_logger
 
-#from sourcelyzer.rest.v1 import HomePage, ProjectResource, UserResource, AuthCommand, PluginsResource
 from sourcelyzer.rest.utils.json import json_error_output, json_processor
-#from sourcelyzer.rest.plugins.sqlalchemy import SAPlugin
 from sourcelyzer.rest.plugins.plugin_loader import PluginLoaderPlugin
-# from sourcelyzer.rest.tools import SATool
 
 import cherrypy
 import threading
@@ -16,7 +13,27 @@ import os
 
 from sourcelyzer.rest.tools import SATool
 
-from sourcelyzer.rest.resources.user import UserResource
+from sourcelyzer.rest.v1.resources.user import UserResource
+from sourcelyzer.rest.v1.resources.project import ProjectResource
+from sourcelyzer.rest.v1.commands import LoginCommand
+from sourcelyzer.rest.v1.plugins import Plugins as PluginsResource
+
+from sourcelyzer.dao import User, PluginRepository
+
+import requests
+
+def refresh_plugins(dbsession):
+
+    try:
+        for row in dbsession.query(PluginRepository).all():
+            url = row.url
+
+            r = requests.get(url + '/plugins.json')
+            print(r.text)
+    finally:
+        dbsession.close()
+ 
+
 
 class ServerThread(threading.Thread):
 
@@ -40,9 +57,11 @@ class ServerThread(threading.Thread):
             os.makedirs(self.sessiondir)
 
         PluginLoaderPlugin(cherrypy.engine, self._config['sourcelyzer.plugin_dir']).subscribe()
- #       SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
+ #        SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
 
         cherrypy.tools.db = SATool(dburi=self._config['sourcelyzer.db.uri'])
+
+        refresh_plugins(cherrypy.tools.db.session())
 
         cherrypy.config.update({
             'server.socket_host': self._config['sourcelyzer.server.listen_addr'],
@@ -58,6 +77,10 @@ class ServerThread(threading.Thread):
             'tools.db.on': True,
             'error_page.default': json_error_output
         })
+
+
+
+
         """
         cherrypy.tree.mount(HomePage(), '/', {'/': {
             'tools.gzip.on': True,
@@ -65,21 +88,21 @@ class ServerThread(threading.Thread):
             'tools.staticdir.root': os.path.abspath(os.getcwd()) + '/web-ui',
             'tools.staticdir.dir': './'
         }})
-        """
+
         """
         cherrypy.tree.mount(ProjectResource(), '/rest/v1/projects', {'/': {
             'error_page.default': json_error_output
         }})
+
         """
         cherrypy.tree.mount(UserResource(), '/api/users', {'/': {
         }})
         """
         cherrypy.tree.mount(PluginsResource(), '/rest/v1/plugins')
 
-        cherrypy.tree.mount(AuthCommand(), '/rest/v1/commands/authenticate', {'/login': {
+        cherrypy.tree.mount(LoginCommand(User), '/rest/v1/commands/authenticate', {'/login': {
             'error_page.default': json_error_output
         }})
-        """
 
         print('starting server at http://%s:%s' % (
             self._config['sourcelyzer.server.listen_addr'],

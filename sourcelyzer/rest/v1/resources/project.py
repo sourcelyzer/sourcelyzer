@@ -1,5 +1,5 @@
 from sourcelyzer.dao import Project
-from sourcelyzer.rest.v1.base import DBResource
+from sourcelyzer.rest.v1.resources.base import DBResource
 from sourcelyzer.rest.tools import RequireAuthentication
 import cherrypy
 
@@ -7,11 +7,11 @@ class ProjectResource(DBResource):
     resource = Project
 
     @RequireAuthentication
-    def handle_GET(self, resid=None, *vpath, **params):
+    def handle_GET(self, resource_id=None, *vpath, **params):
         if 'key' in params:
             return self._get_project_by_key(params['key'])
         else:
-            return DBResource.handle_GET(self, resid, *vpath, **params)
+            return DBResource.handle_GET(self, resource_id, *vpath, **params)
 
     def _get_project_by_key(self, projectKey):
         session = cherrypy.request.db

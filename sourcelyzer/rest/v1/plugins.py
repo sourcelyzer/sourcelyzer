@@ -10,6 +10,7 @@ import glob
 class Plugins():
 
     @cherrypy.expose
+    @cherrypy.tools.json_out()
     @RequireAuthentication
     def default(self, *vpath, **params):
         plugins = cherrypy.engine.publish('get-plugins').pop()
@@ -28,7 +29,7 @@ class Plugins():
             plugin_type = vpath[0]
 
             if plugin_type not in plugins:
-                raise cherrpy.HTTPError(404, 'Plugin type %s not found' % plugin_type)
+                raise cherrypy.HTTPError(404, 'Plugin type %s not found' % plugin_type)
 
             output = []
 

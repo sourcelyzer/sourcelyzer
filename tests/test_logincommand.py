@@ -2,7 +2,7 @@ import simplejson as json
 import cherrypy, sys, os, binascii
 
 from sourcelyzer.rest.utils.json import json_error_output
-from sourcelyzer.rest.common.commands import LoginCommand, SessionCommand
+from sourcelyzer.rest.v1.commands import LoginCommand, SessionCommand
 from sourcelyzer.rest.tools.sqlalchemy import SATool
 from sourcelyzer.crypto import gen_passwd_hash, gen_auth_token
 

@@ -2,7 +2,7 @@ import simplejson as json
 import cherrypy, sys
 
 from sourcelyzer.rest.utils.json import json_error_output
-from sourcelyzer.rest.common.resources import RESTResource
+from sourcelyzer.rest.v1.resources.base import RESTResource
 from cherrypy.test import helper
 
 class RESTResourceClassTest(helper.CPWebCase):

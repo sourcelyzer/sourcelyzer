@@ -28,7 +28,7 @@ class Runner():
 
     def login(self, username, pw):
 
-        login_url = self.rootUrl + '/commands/authenticate/login'
+        login_url = self.rootUrl + '/commands/authenticate'
 
         r = requests.post(login_url, {'username': username, 'password': pw}, cookies=self.cookieJar)
         r.raise_for_status()
@@ -36,6 +36,7 @@ class Runner():
         token = r.json()['token']
         self.sessionId = r.cookies['sourcelyzer']
         self.token = token
+
 
 
     def findProjectByKey(self, projectKey):
@@ -76,5 +77,7 @@ def runner(arguments):
             raise e
     
     print(project)
+
+
 
 
