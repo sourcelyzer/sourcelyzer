@@ -107,3 +107,4 @@ ENV/
 
 # test generated stuff
 tests/rest/v1/test.db
+reports/
