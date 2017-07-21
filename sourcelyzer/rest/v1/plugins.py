@@ -6,7 +6,8 @@ import zipfile
 import io
 import glob
 
-class PluginsResource():
+
+class Plugins():
 
     @cherrypy.expose
     @RequireAuthentication
@@ -73,17 +74,4 @@ class PluginsResource():
 
                 return output
 
-    @RequireAuthentication
-    def handle_GET(self):
-        plugins = cherrypy.engine.publish('get-plugins').pop()
-        print(plugins)
-
-        output = {}
-
-        for plugin_type in plugins:
-            output[plugin_type] = []
-            for plugin in plugins[plugin_type]:
-                output[plugin_type].append(plugin)
-
-        return output
 

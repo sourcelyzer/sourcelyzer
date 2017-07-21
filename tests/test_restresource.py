@@ -1,8 +1,8 @@
-from sourcelyzer.rest.v1.base import RESTResource
-from sourcelyzer.rest.utils.json import json_error_output
 import simplejson as json
 import cherrypy, sys
 
+from sourcelyzer.rest.utils.json import json_error_output
+from sourcelyzer.rest.common.resources import RESTResource
 from cherrypy.test import helper
 
 class RESTResourceClassTest(helper.CPWebCase):
@@ -15,6 +15,8 @@ class RESTResourceClassTest(helper.CPWebCase):
             def handle_GET(self, *vpath, **params):
                 return {'ok': True}
 
+            def handle_POST(self, *vpath, **params):
+                return {'post_ok': True}
 
         cherrypy.config.update({
             'error_page.default': json_error_output,
@@ -30,18 +32,6 @@ class RESTResourceClassTest(helper.CPWebCase):
         self.assertHeader('Content-Type', 'application/json')
         self.assertBody('{"ok": true}')
 
-    def test_handles_invalid_post(self):
-
-        headers = [
-            ('Content-Type', 'application/json'),
-            ('Content-Length', '2')
-        ]
-
-        self.getPage('/', method='POST', headers=headers, body='{}')
-        self.assertStatus(405)
-        self.assertHeader('Content-Type', 'application/json')
-        self.assertHeader('Allow', 'GET')
-
     def test_handles_invalid_put(self):
 
         headers = [
@@ -50,12 +40,19 @@ class RESTResourceClassTest(helper.CPWebCase):
         ]
 
         self.getPage('/', method='PUT', headers=headers, body='{}')
-        self.assertStatus(405)
         self.assertHeader('Content-Type', 'application/json')
-        self.assertHeader('Allow', 'GET')
+        self.assertHeader('Allow', 'GET,POST')
 
-        body = json.loads(self.body.decode('utf-8'))
-        print('body? %s' % body)
-        
-        assert body['status'] == 405
+    def test_handles_valid_post(self):
+
+        headers = [
+            ('Content-Type', 'application/json'),
+            ('Content-Length', '2')
+        ]
+
+        self.getPage('/', method='POST', headers=headers, body='{}')
+        self.assertStatus(200)
+        self.assertHeader('Content-Type', 'application/json')
+        self.assertBody('{"post_ok": true}')
+
 

@@ -4,4 +4,4 @@ from .resources.project import ProjectResource
 from .resources.user import UserResource
 from .pages.home import HomePage
 from .commands.authenticate import AuthCommand
-from .resources.plugins import PluginsResource
+from .plugins import Plugins

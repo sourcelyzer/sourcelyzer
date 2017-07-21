@@ -10,4 +10,4 @@ class Project(Base):
     last_modified = Column(DateTime, onupdate=func.now())
     created_on = Column(DateTime, default=func.now())
     key = Column(String, unique=True)
- 
+

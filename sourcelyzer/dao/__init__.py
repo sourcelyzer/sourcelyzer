@@ -4,3 +4,4 @@ from .session import Session
 from .issue import Issue
 from .settings import Settings
 from .project import Project
+from .scm_commit import ScmCommit

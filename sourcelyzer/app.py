@@ -1,13 +1,10 @@
 from sourcelyzer.logger import get_logger
 
-from sourcelyzer.rest.v1 import HomePage, ProjectResource, UserResource, AuthCommand, PluginsResource
+#from sourcelyzer.rest.v1 import HomePage, ProjectResource, UserResource, AuthCommand, PluginsResource
 from sourcelyzer.rest.utils.json import json_error_output, json_processor
-from sourcelyzer.rest.plugins.sqlalchemy import SAPlugin
+#from sourcelyzer.rest.plugins.sqlalchemy import SAPlugin
 from sourcelyzer.rest.plugins.plugin_loader import PluginLoaderPlugin
-from sourcelyzer.rest.tools import SATool
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+# from sourcelyzer.rest.tools import SATool
 
 import cherrypy
 import threading
@@ -17,6 +14,9 @@ import time
 
 import os
 
+from sourcelyzer.rest.tools import SATool
+
+from sourcelyzer.rest.resources.user import UserResource
 
 class ServerThread(threading.Thread):
 
@@ -40,9 +40,9 @@ class ServerThread(threading.Thread):
             os.makedirs(self.sessiondir)
 
         PluginLoaderPlugin(cherrypy.engine, self._config['sourcelyzer.plugin_dir']).subscribe()
-        SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
+ #       SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
 
-        cherrypy.tools.db = SATool()
+        cherrypy.tools.db = SATool(dburi=self._config['sourcelyzer.db.uri'])
 
         cherrypy.config.update({
             'server.socket_host': self._config['sourcelyzer.server.listen_addr'],
@@ -58,24 +58,28 @@ class ServerThread(threading.Thread):
             'tools.db.on': True,
             'error_page.default': json_error_output
         })
-
+        """
         cherrypy.tree.mount(HomePage(), '/', {'/': {
             'tools.gzip.on': True,
             'tools.staticdir.on': True,
             'tools.staticdir.root': os.path.abspath(os.getcwd()) + '/web-ui',
             'tools.staticdir.dir': './'
         }})
+        """
+        """
         cherrypy.tree.mount(ProjectResource(), '/rest/v1/projects', {'/': {
             'error_page.default': json_error_output
         }})
-        cherrypy.tree.mount(UserResource(), '/rest/v1/users', {'/': {
-            'error_page.default': json_error_output
+        """
+        cherrypy.tree.mount(UserResource(), '/api/users', {'/': {
         }})
+        """
         cherrypy.tree.mount(PluginsResource(), '/rest/v1/plugins')
 
         cherrypy.tree.mount(AuthCommand(), '/rest/v1/commands/authenticate', {'/login': {
             'error_page.default': json_error_output
         }})
+        """
 
         print('starting server at http://%s:%s' % (
             self._config['sourcelyzer.server.listen_addr'],

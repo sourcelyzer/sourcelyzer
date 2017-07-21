@@ -11,4 +11,3 @@ class User(Base):
     email = Column(String)
     is_admin = Column(Boolean)
     last_modified = Column(DateTime, onupdate=datetime.datetime.now)
-    token = Column(String)
