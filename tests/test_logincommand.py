@@ -1,10 +1,11 @@
 import simplejson as json
 import cherrypy, sys, os, binascii
+from pprint import pprint
 
 from sourcelyzer.rest.utils.json import json_error_output
 from sourcelyzer.rest.v1.commands import LoginCommand, SessionCommand
 from sourcelyzer.rest.tools.sqlalchemy import SATool
-from sourcelyzer.crypto import gen_passwd_hash, gen_auth_token
+from sourcelyzer.utils.hashing import gen_passwd_hash, gen_auth_token
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sourcelyzer.dao.base import Base
@@ -89,7 +90,7 @@ class LoginCommandTest(helper.CPWebCase):
         cherrypy.session = RamSession()
 
         self.getPage('/login', method='POST', body='username=test1&password=test1pw')
-
+        pprint(json.loads(self.body))
         self.assertStatus(200)
 
         body = json.loads(self.body.decode('utf-8'))
@@ -129,6 +130,7 @@ class LoginCommandTest(helper.CPWebCase):
 
     def test_bad_password(self):
         self.getPage('/login', method='POST', body='username=test1&password=bad_pw')
+        pprint(json.loads(self.body))
         self.assertStatus(401)
 
     def test_bad_username(self):

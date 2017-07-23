@@ -39,8 +39,8 @@ class LoginCommand(Command):
             raise cherrypy.HTTPError(401)
 
         try:
-            verify_hash(user.password, password)
-        except InvalidHash:
+            verify_passwd_hash(user.password, password)
+        except InvalidHashError:
             raise cherrypy.HTTPError(401)
 
         token = gen_auth_token(user.username, user.password, user.id, cherrypy.session.id)

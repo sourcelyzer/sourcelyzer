@@ -1,7 +1,8 @@
 import hashlib, os, binascii, sys, io
 from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 from sourcelyzer.exceptions import InvalidHashError
-
+from base64 import b64encode, b64decode
 def stream_hashsum(ioobj, hasher, blocksize=65536):
     """Generate a hash sum from a filelike object using the supplied hashlib algorithm.
 
@@ -89,9 +90,15 @@ def gen_passwd_hash(pw):
     ph = PasswordHasher()
     return ph.hash(pw)
 
-def verify_passwd_hash(pw, hs):
+def verify_passwd_hash(hs, pw):
+
+    print('VERIFY PASSWD HASH: %s -- %s' % (hs, pw))
+
     ph = PasswordHasher()
-    ph.verify(hs, pw)
+    try:
+        ph.verify(hs, pw)
+    except VerifyMismatchError as e:
+        raise InvalidHashError(e)
 
 
 def gen_auth_token(username, password, userid, session_id, encoding='utf-8'):
