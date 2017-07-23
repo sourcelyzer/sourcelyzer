@@ -1,25 +1,28 @@
 import os
 import pickle
-import requests
-from docopt import docopt
-from sourcelyzer.properties import load_from_file
-from sourcelyzer.dao import PluginRepository
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sourcelyzer.utils.crypto import file_hash
-from sourcelyzer.plugins.key import PluginKey
 import hashlib
 import io
 import json
 import zipfile
-import configparser
 import shutil
 import tempfile
 import threading
+import configparser
 import logging
 from datetime import datetime
+
 from colorama import Fore
-import http.client
+from docopt import docopt
+from sourcelyzer.properties import load_from_file
+from sourcelyzer.dao import PluginRepository
+from sourcelyzer.logging import init_logger
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sourcelyzer.plugins.key import PluginKey
+from sourcelyzer.exceptions import *
+from sourcelyzer.utils.hashing import verify_md5sum_string, verify_sha256sum_string
+from sourcelyzer.utils.hashing import verify_md5sum_stream, verify_sha256sum_stream
+import requests
 from requests.exceptions import HTTPError, ConnectionError
 
 __doc__ = """Sourcelyzer Plugin Installer
@@ -27,7 +30,8 @@ __doc__ = """Sourcelyzer Plugin Installer
 This is an internal CLI script and is not meant to be used .
 
 Usage:
-    sl-install.py install --key=<plugin_key> --sessionid=<sessionid> --auth=<authtoken> [--config=<config_file>] [--debug] [--no-color]
+    plugins.py install --key=<plugin_key> --sessionid=<sessionid> --auth=<authtoken> [--config=<config_file>] [--debug] [--no-color]
+    plugins.py uninstall --key=<plugin_key> --sessionid=<sessionid> --auth=<authtoken> [--config=<config_file>] [--debug] [--no-color]
 
 Commands:
     install         Install a plugin
@@ -50,63 +54,28 @@ LOGLVL_COLORMAP = {
     'CRITICAL': Fore.MAGENTA
 }
 
-MSG_COLORMAP = {
-    'DEBUG': Fore.LIGHTGREEN_EX,
-    'INFO': Fore.RESET,
-    'WARNING': Fore.LIGHTWHITE_EX,
-    'ERROR': Fore.LIGHTRED_EX,
-    'CRITICAL': Fore.LIGHTMAGENTA_EX
-}
-
-class StandardLogFormatter(logging.Formatter):
-    def format(self, record):
-        msg = '%s [%s] %s: %s' % (datetime.now(), record.levelname.ljust(8), record.name, record.msg)
-        return msg
-
-
-class ColorLogFormatter(logging.Formatter):
-
-    def format(self, record):
-        lvlname_color = LOGLVL_COLORMAP[record.levelname]
-        msg_color = MSG_COLORMAP[record.levelname]
-        lvlname = record.levelname.ljust(8)
-
-        lvl = '%s%s [%s%s%s] %s%s: %s' % (Fore.WHITE, datetime.now(), lvlname_color, lvlname, Fore.WHITE, Fore.BLUE, record.name, Fore.RESET)
-
-        msg = '%s %s%s%s' % (lvl, msg_color, record.msg, Fore.RESET)
-        return msg
-
-def init_logging(name, level, color=True):
-
-    formatter = ColorLogFormatter() if color == True else StandardLogFormatter()
-
-    handler = logging.StreamHandler()
-    handler.setFormatter(formatter)
-
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.addHandler(handler)
-    logger.propagate = True
-
 
 class InstallPlugin(threading.Thread):
 
     def __init__(self, config, session, plugin_key,  *args, **kwargs):
         self.config = config
-        self.session = session
         self.plugin_key = plugin_key
 
     def run(self):
-        install_plugin(config, plugin_key)
-
+        install_plugin(self.config, self.plugin_key)
 
 
 def run(args):
+    """CLI Run Function.
 
+    Takes output of docopt as input
+    """
     loglvl = logging.DEBUG if args['--debug'] == True else logging.INFO
 
-    init_logging('sourcelyzer', loglvl, not args['--no-color'])
+    init_logger('sourcelyzer', loglvl, not args['--no-color'])
     logger = logging.getLogger('sourcelyzer')
+
+    logger.debug(args)
 
     cwd = os.path.realpath(os.path.join(os.path.dirname(__file__), '../', '../', '../'))
 
@@ -136,35 +105,11 @@ def run(args):
 
     logger.debug('Plugin Key: %s' % str(plugin_key))
 
-    install_plugin(config, plugin_key)
+    if args['install'] == True:
+        install_plugin(config, plugin_key)
+    elif args['uninstall'] == True:
+        uninstall_plugin(config, plugin_key)
 
-
-class InvalidHashError(BaseException):
-    pass
-
-class UnknownPluginError(BaseException):
-    pass
-
-class UnknownPluginTypeError(BaseException):
-    pass
-
-class UnknownPluginError(BaseException):
-    pass
-
-class UnknownPluginVersionError(BaseException):
-    pass
-
-class PluginAlreadyInstalledError(BaseException):
-    pass
-
-def verify_hash_str(content, target_hash, hasher):
-    verify_hash_fobj(io.BytesIO(content.encode('utf-8')), target_hash, hasher)
-
-def verify_hash_fobj(fobj, target_hash, hasher):
-    check_hash = file_hash(fobj, hasher)
-
-    if check_hash != target_hash:
-        raise InvalidHashError('Expected %s but got %s' % (target_hash, check_hash))
 
 def get_url(url, stream=False):
     logger = logging.getLogger('sourcelyzer')
@@ -185,11 +130,11 @@ def get_plugin_metadata(plugin_url):
 
     logger.info('Verifying metadata MD5')
     metadata_md5     = get_url(metadata_url + '.md5').text
-    verify_hash_str(metadata_content, metadata_md5, hashlib.md5())
+    verify_md5sum_string(metadata_content, metadata_md5)
 
     logger.info('Verifying metadata SHA256')
     metadata_sha     = get_url(metadata_url + '.sha256').text
-    verify_hash_str(metadata_content, metadata_sha, hashlib.sha256())
+    verify_sha256sum_string(metadata_content, metadata_sha)
 
     logger.info('Loading metadata')
     plugin_metadata = json.loads(metadata_content)
@@ -212,13 +157,14 @@ def get_plugin_zip(plugin_url, plugin_dir, plugin_key):
 
         logger.info('Verifying plugin zip SHA256')
         plugin_sha = get_url(zip_url + '.sha256').text
-        verify_hash_fobj(tf, plugin_sha, hashlib.sha256())
+        verify_sha256sum_stream(tf, plugin_sha)
 
         tf.seek(0)
         logger.info('Verifying plugin zip MD5')
         plugin_md5 = get_url(zip_url + '.md5').text
-        verify_hash_fobj(tf, plugin_md5, hashlib.md5())
- 
+        verify_md5sum_stream(tf, plugin_md5)
+
+        return tf
 
         dest_zip = os.path.join(plugin_dir, '%s.zip' % str(plugin_key))
 
@@ -238,38 +184,90 @@ def get_plugin_zip(plugin_url, plugin_dir, plugin_key):
         return dest_zip
 
     finally:
-        tf.close()
+        pass
+
+
+def search_for_plugin(plugin_key, repos):
+
+    for repo in repos:
+
+        try:
+
+            logger.info('Checking repository %s' % repo.url)
+            try:
+                plugins = get_url(repo.url + '/plugins.json').json()
+            except (ConnectionError, HTTPError) as e:
+                logger.warning('%s' % e)
+                continue
+
+            if plugin_key.plugin_type not in plugins:
+                raise UnknownPluginTypeError(plugin_key.plugin_type)
+
+            if plugin_key.plugin_name not in plugins[plugin_key.plugin_type]:
+                raise UnknownPluginError(plugin_name)
+
+            if plugin_key.plugin_version not in plugins[plugin_key.plugin_type][plugin_key.plugin_name]['versions']:
+                raise UnknownPluginVersionError('%s' % plugin_key)
+
+            repo_url = repo.url
+            break
+
+        except (UnknownPluginTypeError, UnknownPluginError, UnknownPluginVersionError):
+            pass
+
+    return repo_url
+
+def uninstall_plugin(config, plugin_key, purge=False):
+
+    logger = logging.getLogger('sourcelyzer')
+    logger.info('Uninstalling %s' % str(plugin_key))
+
+    target_plugin_dir = os.path.join(config['sourcelyzer.plugin_dir'], '%s.%s' % (plugin_key.plugin_type, plugin_key.plugin_name))
+
+    logger.debug('Target plugin directory: %s' % target_plugin_dir)
+
+    if os.path.exists(target_plugin_dir):
+       shutil.rmtree(target_plugin_dir)
+    else:
+        logger.warning('%s seems to already be uninstalled' % str(plugin_key))
+
+    logger.info('%s uninstalled' % str(plugin_key))
+
+def get_installed_plugin(config, plugin_type, plugin_name):
+    plugin_dir = os.path.realpath(config['sourcelyzer.plugin_dir'])
+    target_plugin_dir = os.path.join(plugin_dir, '%s.%s' % (plugin_type, plugin_name))
+
+    plugin_conf = configparser.ConfigParser()
+    plugin_conf.read(os.path.join(target_plugin_dir, 'plugin.ini'))
+
+    return PluginKey('%s.%s-%s' % (plugin_type, plugin_name, plugin_conf['plugin']['version']))
+
+def is_plugin_installed(config, plugin_type, plugin_name):
+    plugin_dir = os.path.realpath(config['sourcelyzer.plugin_dir'])
+    target_plugin_dir = os.path.join(plugin_dir, '%s.%s' % (plugin_type, plugin_name))
+
+    return os.path.exists(target_plugin_dir)
 
 
 def install_plugin(config, plugin_key):
     logger = logging.getLogger('sourcelyzer')
-    logger.info('Attempting to install %s' % str(plugin_key))
-
+    logger.info('Installing %s' % str(plugin_key))
+    exit_code = 0
     try:
 
         plugins_dir = os.path.realpath(config['sourcelyzer.plugin_dir'])
         target_plugin_dir = os.path.join(plugins_dir, '%s.%s' % (plugin_key.plugin_type, plugin_key.plugin_name))
 
         logger.debug('Plugins directory: %s' % plugins_dir)
-        logger.debug('Target plugin directiry: %s' % target_plugin_dir)
+        logger.debug('Target plugin directory: %s' % target_plugin_dir)
 
-        plugin_ini = os.path.join(target_plugin_dir, 'plugin.ini')
-        backup_dir = os.path.join(plugins_dir, 'backups')
+        installed_key = None
 
         if os.path.exists(target_plugin_dir):
-            logger.debug('Target plugin directory exists')
 
-            plugin_conf = configparser.ConfigParser()
-            plugin_conf.read(plugin_ini)
-
-            if plugin_conf['plugin']['version'] == plugin_key.plugin_version:
+            installed_key = get_installed_plugin(config, plugin_key.plugin_type, plugin_key.plugin_name)
+            if installed_key == plugin_key:
                 raise PluginAlreadyInstalledError('Plugin %s is already installed' % str(plugin_key))
-            else:
-                logger.info('Plugin already installed but versions differ. Backing up currently installed plugin.')
-                if not os.path.exists(backup_dir):
-                    os.makedirs(backup_dir)
-
-                shutil.copytree(target_plugin_dir, os.path.join(plugins_dir, 'backups', '%s.%s' % (plugin_key.plugin_type, plugin_key.plugin_name)))
 
         engine = create_engine(config['sourcelyzer.db.uri'])
 
@@ -313,23 +311,56 @@ def install_plugin(config, plugin_key):
         if not repo_url:
             raise UnknownPlugin('%s' % plugin_key)
 
+        if is_plugin_installed(config, plugin_key.plugin_type, plugin_key.plugin_name):
+            uninstall_plugin(config, plugin_key)
+
         plugin_url = '%s/%s/%s/%s' % (repo_url, plugin_key.plugin_type, plugin_key.plugin_name, plugin_key.plugin_version)
         plugin_metadata = get_plugin_metadata(plugin_url)
         plugin_zip = get_plugin_zip(plugin_url, target_plugin_dir, plugin_key)
 
-        with zipfile.ZipFile(plugin_zip) as pz:
+        if installed_key:
+            uninstall_plugin(config, installed_key)
+
+        logger.info('Copying temporary zip file to plugin directory')
+        dest_zip = os.path.join(target_plugin_dir, '%s.zip' % (str(plugin_key)))
+
+        if not os.path.exists(target_plugin_dir):
+            os.makedirs(target_plugin_dir)
+
+        with open(dest_zip, 'wb') as target_f:
+            plugin_zip.seek(0)
+            while True:
+                buf = plugin_zip.read(1024)
+                if len(buf) > 0:
+                    target_f.write(buf)
+                else:
+                    break
+
+        plugin_zip.close()
+
+        logger.info('Unzipping plugin')
+        with zipfile.ZipFile(dest_zip) as pz:
             pz.extractall(target_plugin_dir)
+
+        logger.info('Plugin %s has been successfully instaled' % str(plugin_key))
     except (UnknownPluginError, UnknownPluginError, UnknownPluginTypeError, UnknownPluginVersionError):
         logger.error('Plugin %s could not be found' % str(plugin_key))
+        exit_code = 5
     except PluginAlreadyInstalledError:
         logger.error('Plugin %s is already installed' % str(plugin_key))
+        exit_code = 4
     except HTTPError as e:
         logger.error('%s' % e)
+        exit_code = 3
     except InvalidHashError as e:
         logger.error('%s' % e)
+        exit_code = 2
     except Exception as e:
         logger.critical('Unknown Exception')
-        logger.exception(e)
+        logger.exception()
+        exit_code = 1
+
+    return exit_code
 
 
 if __name__ == '__main__':

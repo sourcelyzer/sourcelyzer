@@ -1,4 +1,4 @@
-from sourcelyzer.logger import get_logger
+from sourcelyzer.logging import init_logger
 
 from sourcelyzer.rest.utils.json import json_error_output, json_processor
 from sourcelyzer.rest.plugins.plugin_loader import PluginLoaderPlugin
@@ -56,12 +56,12 @@ class ServerThread(threading.Thread):
         if not os.path.exists(self.sessiondir):
             os.makedirs(self.sessiondir)
 
-        PluginLoaderPlugin(cherrypy.engine, self._config['sourcelyzer.plugin_dir']).subscribe()
+        # PluginLoaderPlugin(cherrypy.engine, self._config['sourcelyzer.plugin_dir']).subscribe()
  #        SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
 
         cherrypy.tools.db = SATool(dburi=self._config['sourcelyzer.db.uri'])
 
-        refresh_plugins(cherrypy.tools.db.session())
+        # refresh_plugins(cherrypy.tools.db.session())
 
         cherrypy.config.update({
             'server.socket_host': self._config['sourcelyzer.server.listen_addr'],
@@ -119,9 +119,11 @@ class ServerThread(threading.Thread):
 
 class App():
     def __init__(self, config):
+ 
         self.config = config
         self._running = False
-        self.logger = get_logger('sourcelyzer')
+        init_logger('sourcelyzer')
+        self.logger = logging.getLogger('sourcelyzer')
 
     def isRunning(self):
         return self._running

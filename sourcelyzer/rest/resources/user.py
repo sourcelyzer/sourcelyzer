@@ -1,6 +1,6 @@
 from sourcelyzer.rest.common import DBResource
 from sourcelyzer.dao.user import User
-from sourcelyzer.crypto import gen_passwd_hash
+from sourcelyzer.utils.hashing import gen_passwd_hash
 import cherrypy
 
 class UserResource(DBResource):

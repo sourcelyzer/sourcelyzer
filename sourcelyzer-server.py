@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import os
 from docopt import docopt
 from sourcelyzer.cli import server
 
@@ -24,7 +25,6 @@ options:
     -c --config CONFFILE   Location of app.config file
     -d --debug  Enable debugging output
 """
-
 
 if __name__ == '__main__':
     server(docopt(__doc__))

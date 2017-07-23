@@ -94,8 +94,7 @@ any necessary secret tokens.
 
     outnl('Initializing Plugins')
 
-    plugin_repo_dao = PluginRepository(name='Sourcelyzer Plugin Repository', url='https://raw.githubusercontent.com/sourcelyzer/slpr/develop/repo')
-    session.add(plugin_repo_dao)
+    session.add(PluginRepository(name='Sourcelyzer Plugin Repository', url='https://raw.githubusercontent.com/sourcelyzer/slpr/develop/repo'))
 
     outnl('Committing changes')
     session.commit()

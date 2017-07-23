@@ -2,7 +2,7 @@ import cherrypy
 import simplejson as json
 
 from sourcelyzer.rest.tools import RequireAuthentication
-from sourcelyzer.crypto import gen_passwd_hash
+from sourcelyzer.utils.hashing import gen_passwd_hash
 
 class RESTResource():
     """A basic REST Resource

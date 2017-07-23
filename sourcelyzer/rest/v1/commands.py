@@ -1,7 +1,8 @@
-from sourcelyzer.crypto import verify_hash
-from sourcelyzer.crypto import gen_auth_token
-from sourcelyzer.crypto import InvalidHash
-from sourcelyzer.crypto import verify_auth_token
+from sourcelyzer.utils.hashing import verify_passwd_hash
+from sourcelyzer.utils.hashing import gen_auth_token
+from sourcelyzer.utils.hashing import verify_auth_token
+from sourcelyzer.exceptions import *
+
 import cherrypy
 
 class Command():

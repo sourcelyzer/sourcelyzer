@@ -17,6 +17,18 @@ class PluginKey(tuple):
     def plugin_version(self):
         return self[2]
 
+    def __eq__(self, other):
+        if other.plugin_type != self.plugin_type:
+            return False
+
+        if other.plugin_name != self.plugin_name:
+            return False
+
+        if other.plugin_version != self.plugin_version:
+            return False
+
+        return True
+
     def __str__(self):
         return "%s.%s-%s" % (self.plugin_type, self.plugin_name, self.plugin_version)
 
