@@ -42,19 +42,20 @@ class ServerThread(threading.Thread):
         self._running = False
         self._config = config
 
-        self.homedir = os.path.expanduser('~/.sourcelyzer')
-        self.sessiondir = os.path.join(self.homedir, 'sessions')
+        self.data_dir = os.path.expanduser(self._config['sourcelyzer.data_dir'])
+        self.session_dir = os.path.join(self.data_dir, 'sessions')
+        self.plugin_dir = os.path.join(self.data_dir, 'plugins')
 
     def isRunning(self):
         return self._running
 
     def run(self):
 
-        if not os.path.exists(self.homedir):
-            os.makedirs(self.homedir)
+        if not os.path.exists(self.data_dir):
+            os.makedirs(self.data_dir)
 
-        if not os.path.exists(self.sessiondir):
-            os.makedirs(self.sessiondir)
+        if not os.path.exists(self.session_dir):
+            os.makedirs(self.session_dir)
 
         # PluginLoaderPlugin(cherrypy.engine, self._config['sourcelyzer.plugin_dir']).subscribe()
  #        SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
@@ -69,9 +70,10 @@ class ServerThread(threading.Thread):
             'tools.json_in.processor': json_processor,
             'tools.sessions.on': True,
             'tools.sessions.storage_class': cherrypy.lib.sessions.FileSession,
-            'tools.sessions.storage_path': self.sessiondir,
+            'tools.sessions.storage_path': self.session_dir,
             'tools.sessions.name': 'sourcelyzer',
-            'tools.sessions.timeout': 60,
+            'tools.sessions.timeout': 10,
+            'tools.sessions.clean_freq': 8,
             'tools.sessions.debug': True,
             'tools.sessions.path': None,
             'tools.db.on': True,

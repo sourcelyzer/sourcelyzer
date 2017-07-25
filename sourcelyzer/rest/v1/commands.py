@@ -1,6 +1,7 @@
 from sourcelyzer.utils.hashing import verify_passwd_hash
 from sourcelyzer.utils.hashing import gen_auth_token
 from sourcelyzer.utils.hashing import verify_auth_token
+from sourcelyzer.rest.tools.tools import RequireAuthentication
 from sourcelyzer.exceptions import *
 
 import cherrypy
@@ -8,8 +9,24 @@ import cherrypy
 class Command():
     pass
 
+
+class InstallPluginCommand(Command):
+
+    def __init__(self):
+        pass
+
+    @cherrypy.tools.json_out()
+    @RequireAuthentication
+    @cherrypy.expose
+    def default(self, plugin_key):
+        if cherrpy.request.method != 'POST':
+            cherrypy.response.headers['Allow'] = 'POST'
+            raise cherrypy.HTTPError(405)
+
+
+
 class LoginCommand(Command):
-    
+
     def __init__(self, user):
         """Login Command
 

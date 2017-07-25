@@ -1,4 +1,6 @@
-from setuptools import setup
+from setuptools import setup, find_packages
+
+print(find_packages(exclude=['tests*']))
 
 setup(name='sourcelyzer',
       version='0.0.1',
@@ -7,6 +9,6 @@ setup(name='sourcelyzer',
       author='Alex Dow',
       author_email='adow@psikon.com',
       license='MIT',
-      package=['sourcelyzer'],
+      packages=find_packages(),
       zip_safe=False
 )

@@ -30,8 +30,8 @@ __doc__ = """Sourcelyzer Plugin Installer
 This is an internal CLI script and is not meant to be used .
 
 Usage:
-    plugins.py install --key=<plugin_key> --sessionid=<sessionid> --auth=<authtoken> [--config=<config_file>] [--debug] [--no-color]
-    plugins.py uninstall --key=<plugin_key> --sessionid=<sessionid> --auth=<authtoken> [--config=<config_file>] [--debug] [--no-color]
+    plugins.py install -k <plugin_key> -s <sessionid> -a <authtoken> [-c <config_file>] [-d] [-n] 
+    plugins.py uninstall -k <plugin_key> -s <sessionid> -a <authtoken> [-c <config_file>] [-d] [-n]
 
 Commands:
     install         Install a plugin
@@ -43,7 +43,8 @@ Options:
     -a --auth AUTH_TOKEN       Authorization token
     -c --config CONFIG_FILE    Location of sourcelyzer configuration file
     -d --debug                 Debug output
-    --no-color                 Turn off colored output
+    -f --force                 If plugin exists, overwrite it
+    -n --no-color                 Turn off colored output
 """
 
 LOGLVL_COLORMAP = {
@@ -57,11 +58,38 @@ LOGLVL_COLORMAP = {
 
 class InstallPlugin(threading.Thread):
 
-    def __init__(self, config, session, plugin_key,  *args, **kwargs):
+    def __init__(self, config, session_id, plugin_key,  *args, **kwargs):
         self.config = config
         self.plugin_key = plugin_key
 
-    def run(self):
+        self.data_dir = os.path.expanduser(self.config['sourcelyzer.data_dir'])
+        self.plugin_dir = os.path.join(self.data_dir, 'plugins')
+        self.session_dir = os.path.join(self.data_dir, 'sessions')
+        self.session_id = session_id
+
+    def run(self, debug=False, colored=False):
+
+        logname = 'sl-install-plugin-%s' % self.ident
+        loglvl = logging.DEBUG if debug == True else logging.INFO
+        init_logger(logname, loglvl, colored)
+        logger = logging.getLogger(logname)
+
+        session_file = os.path.join(self.session_dir, 'session-%s' % self.session_id)
+
+        logger.debug('Data directory: %s' % self.data_dir)
+        logger.debug('Plugin directory: %s' % self.plugin_dir)
+        logger.debug('Session file: %s' % session_file)
+
+        session_data, session_exp = pickle.load(open(session_file, 'rb'))
+
+        if not os.path.exists(session_file):
+            logger.critical('Session file does not exist')
+            return
+
+        if session_data['user']['auth'] != True or session_data['user']['token'] != args['--auth']:
+            logger.critical('Not Authenticated')
+            return
+
         install_plugin(self.config, self.plugin_key)
 
 
@@ -77,29 +105,28 @@ def run(args):
 
     logger.debug(args)
 
-    cwd = os.path.realpath(os.path.join(os.path.dirname(__file__), '../', '../', '../'))
-
-    logger.debug('Current Working Directory: %s' % cwd)
-
-    os.chdir(cwd)
-
     conffile = args['--config'] if args['--config'] != None else 'conf/server.properties'
 
     logger.debug('Config file: %s' % conffile)
 
     config = load_from_file(conffile)
 
-    session_dir = os.path.expanduser('~/.sourcelyzer')
+    session_dir = os.path.expanduser(config['sourcelyzer.data_dir'])
     session_dir = os.path.join(session_dir, 'sessions')
 
     session_file = os.path.join(session_dir, 'session-%s' % args['--sessionid'])
 
     logger.debug('Session File: %s' % session_file)
 
+    if not os.path.exists(session_file):
+        logger.critical('Invalid session')
+        return
+
     session_data, session_exp = pickle.load(open(session_file, 'rb'))
 
     if session_data['user']['auth'] != True or session_data['user']['token'] != args['--auth']:
-        raise Exception('Not Authenticated')
+        logger.critical('Not Authenticated')
+        return
 
     plugin_key = PluginKey(args['--key'])
 
@@ -255,7 +282,8 @@ def install_plugin(config, plugin_key):
     exit_code = 0
     try:
 
-        plugins_dir = os.path.realpath(config['sourcelyzer.plugin_dir'])
+        data_dir = os.path.realpath(os.path.expanduser(config['sourcelyzer.data_dir']))
+        plugins_dir = os.path.join(data_dir, 'plugins')
         target_plugin_dir = os.path.join(plugins_dir, '%s.%s' % (plugin_key.plugin_type, plugin_key.plugin_name))
 
         logger.debug('Plugins directory: %s' % plugins_dir)
@@ -355,10 +383,6 @@ def install_plugin(config, plugin_key):
     except InvalidHashError as e:
         logger.error('%s' % e)
         exit_code = 2
-    except Exception as e:
-        logger.critical('Unknown Exception')
-        logger.exception()
-        exit_code = 1
 
     return exit_code
 

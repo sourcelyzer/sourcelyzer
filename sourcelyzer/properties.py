@@ -3,6 +3,7 @@
 #
 # properties file parser
 ###
+import os
 
 def load_from_str(conf):
     args = {}
@@ -23,9 +24,14 @@ def load_from_str(conf):
     return p
 
 def load_from_file(fn):
+
+    path = os.path.realpath(fn)
+
     try:
-        with open(fn) as f:
-            return load_from_str(f.read())
+        with open(path) as f:
+            config = load_from_str(f.read())
+            config._filename = path
+            return config
     except Exception as e:
         raise e
 
@@ -36,6 +42,11 @@ class Properties():
     def __init__(self, args):
         self._args = args
         self._hash = None
+        self._filename = None
+
+    @property
+    def filename(self):
+        return self._filename
 
     def __getitem__(self, key):
         return self._args[key]
@@ -50,7 +61,7 @@ class Properties():
         if self._hash == None:
             self._hash = hash(frozenset(self._args.items()))
         return self._hash
-    
+ 
     def __repr__(self):
         props = ""
 

@@ -15,4 +15,4 @@ class Plugin(Base):
     created_on = Column(DateTime, default=func.now())
     last_modified = Column(DateTime, onupdate=func.now())
     installed = Column(Boolean)
-
+    enabled = Column(Boolean)
