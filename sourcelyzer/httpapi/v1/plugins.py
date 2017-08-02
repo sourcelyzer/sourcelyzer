@@ -1,5 +1,5 @@
-from sourcelyzer.rest.v1.base import RESTResource
-from sourcelyzer.rest.tools import RequireAuthentication
+from sourcelyzer.httpapi.v1.base import RESTResource
+from sourcelyzer.httpapi.tools import RequireAuthentication
 from sourcelyzer.cli.apps.plugins import InstallPlugin
 
 from random import randint

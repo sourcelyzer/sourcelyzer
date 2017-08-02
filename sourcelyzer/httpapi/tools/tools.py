@@ -1,5 +1,5 @@
 import cherrypy
-from sourcelyzer.rest.utils.auth import verify_auth_token
+from sourcelyzer.httpapi.utils.auth import verify_auth_token
 
 def check_required_param(paramName, params):
     if paramName not in params:

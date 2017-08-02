@@ -1,5 +1,5 @@
-from sourcelyzer.rest.tools import tools
-from sourcelyzer.rest.utils import auth
+erom sourcelyzer.httpapi.tools import tools
+from sourcelyzer.httpapi.utils import auth
 from cherrypy.test import helper
 from cherrypy.lib.sessions import RamSession
 import cherrypy

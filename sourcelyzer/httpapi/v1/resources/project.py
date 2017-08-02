@@ -1,6 +1,6 @@
 from sourcelyzer.dao import Project
-from sourcelyzer.rest.v1.resources.base import DBResource
-from sourcelyzer.rest.tools import RequireAuthentication
+from sourcelyzer.httpapi.v1.resources.base import DBResource
+from sourcelyzer.httpapi.tools import RequireAuthentication
 import cherrypy
 
 class ProjectResource(DBResource):

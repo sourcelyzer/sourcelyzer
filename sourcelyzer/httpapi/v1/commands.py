@@ -1,7 +1,7 @@
 from sourcelyzer.utils.hashing import verify_passwd_hash
 from sourcelyzer.utils.hashing import gen_auth_token
 from sourcelyzer.utils.hashing import verify_auth_token
-from sourcelyzer.rest.tools.tools import RequireAuthentication
+from sourcelyzer.httpapi.tools.tools import RequireAuthentication
 from sourcelyzer.exceptions import *
 
 import cherrypy

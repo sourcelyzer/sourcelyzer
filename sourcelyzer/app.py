@@ -1,7 +1,7 @@
 from sourcelyzer.logging import init_logger
 
-from sourcelyzer.rest.utils.json import json_error_output, json_processor
-from sourcelyzer.rest.plugins.plugin_loader import PluginLoaderPlugin
+from sourcelyzer.httpapi.utils.json import json_error_output, json_processor
+from sourcelyzer.httpapi.plugins.plugin_loader import PluginLoaderPlugin
 
 import cherrypy
 import threading
@@ -11,12 +11,12 @@ import time
 
 import os
 
-from sourcelyzer.rest.tools import SATool
+from sourcelyzer.httpapi.tools import SATool
 
-from sourcelyzer.rest.v1.resources.user import UserResource
-from sourcelyzer.rest.v1.resources.project import ProjectResource
-from sourcelyzer.rest.v1.commands import LoginCommand
-from sourcelyzer.rest.v1.plugins import Plugins as PluginsResource
+from sourcelyzer.httpapi.v1.resources.user import UserResource
+from sourcelyzer.httpapi.v1.resources.project import ProjectResource
+from sourcelyzer.httpapi.v1.commands import LoginCommand
+from sourcelyzer.httpapi.v1.plugins import Plugins as PluginsResource
 
 from sourcelyzer.dao import User, PluginRepository
 
@@ -143,7 +143,7 @@ class ServerThread(threading.Thread):
         }})
 
         """
-        cherrypy.tree.mount(ProjectResource(), '/rest/v1/projects', {'/': {
+        cherrypy.tree.mount(ProjectResource(), '/httpapi/v1/projects', {'/': {
             'error_page.default': json_error_output
         }})
 
@@ -151,9 +151,9 @@ class ServerThread(threading.Thread):
         cherrypy.tree.mount(UserResource(), '/api/users', {'/': {
         }})
         """
-        cherrypy.tree.mount(PluginsResource(config=self._config), '/rest/v1/plugins')
+        cherrypy.tree.mount(PluginsResource(config=self._config), '/httpapi/v1/plugins')
 
-        cherrypy.tree.mount(LoginCommand(User), '/rest/v1/commands/authenticate', {'/login': {
+        cherrypy.tree.mount(LoginCommand(User), '/httpapi/v1/commands/authenticate', {'/login': {
             'error_page.default': json_error_output
         }})
 

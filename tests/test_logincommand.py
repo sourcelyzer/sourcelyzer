@@ -2,9 +2,9 @@ import simplejson as json
 import cherrypy, sys, os, binascii
 from pprint import pprint
 
-from sourcelyzer.rest.utils.json import json_error_output
-from sourcelyzer.rest.v1.commands import LoginCommand, SessionCommand
-from sourcelyzer.rest.tools.sqlalchemy import SATool
+from sourcelyzer.httpapi.utils.json import json_error_output
+from sourcelyzer.httpapi.v1.commands import LoginCommand, SessionCommand
+from sourcelyzer.httpapi.tools.sqlalchemy import SATool
 from sourcelyzer.utils.hashing import gen_passwd_hash, gen_auth_token
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime

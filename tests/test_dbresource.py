@@ -1,9 +1,9 @@
 from sourcelyzer.dao.base import Base
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sourcelyzer.rest.utils.json import json_error_output
-from sourcelyzer.rest.v1.resources.base import DBResource
-from sourcelyzer.rest.plugins.sqlalchemy import SAPlugin
-from sourcelyzer.rest.tools.sqlalchemy import SATool
+from sourcelyzer.httpapi.utils.json import json_error_output
+from sourcelyzer.httpapi.v1.resources.base import DBResource
+from sourcelyzer.httpapi.plugins.sqlalchemy import SAPlugin
+from sourcelyzer.httpapi.tools.sqlalchemy import SATool
 from sourcelyzer.utils.hashing import gen_passwd_hash
 import os
 import cherrypy

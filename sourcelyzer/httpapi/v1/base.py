@@ -1,7 +1,7 @@
 import cherrypy
 import simplejson as json
-from sourcelyzer.rest.v1.exceptions import RestResourceException
-from sourcelyzer.rest.tools import RequireAuthentication
+from sourcelyzer.httpapi.v1.exceptions import RestResourceException
+from sourcelyzer.httpapi.tools import RequireAuthentication
 
 class RESTResource():
     """

@@ -61,7 +61,7 @@ def runner(arguments):
 
     props = load_from_file(conffile)
 
-    app = Runner(arguments['--url'], '/rest/v1')
+    app = Runner(arguments['--url'], '/httpapi/v1')
 
     username = arguments['--user']
     password = arguments['--password']
