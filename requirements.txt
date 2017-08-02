@@ -1,4 +1,5 @@
 docopt
+semver
 colorama
 cherrypy
 requests

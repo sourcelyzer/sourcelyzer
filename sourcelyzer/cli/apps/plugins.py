@@ -9,12 +9,17 @@ import tempfile
 import threading
 import configparser
 import logging
+import sys
+import semver
+import time
 from datetime import datetime
+import multiprocessing
+import cherrypy
 
 from colorama import Fore
 from docopt import docopt
 from sourcelyzer.properties import load_from_file
-from sourcelyzer.dao import PluginRepository
+from sourcelyzer.dao import PluginRepository, Plugin
 from sourcelyzer.logging import init_logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -30,7 +35,7 @@ __doc__ = """Sourcelyzer Plugin Installer
 This is an internal CLI script and is not meant to be used .
 
 Usage:
-    plugins.py install -k <plugin_key> -s <sessionid> -a <authtoken> [-c <config_file>] [-d] [-n] 
+    plugins.py install -k <plugin_key> -s <sessionid> -a <authtoken> -r <repoid> [-c <config_file>] [-d] [-n] 
     plugins.py uninstall -k <plugin_key> -s <sessionid> -a <authtoken> [-c <config_file>] [-d] [-n]
 
 Commands:
@@ -39,6 +44,7 @@ Commands:
 
 Options:
     -k --key PLUGIN_KEY        Plugin key
+    -r --repo-id REPO_ID       Repository ID
     -s --sessionid SESSION_ID  Session ID
     -a --auth AUTH_TOKEN       Authorization token
     -c --config CONFIG_FILE    Location of sourcelyzer configuration file
@@ -58,39 +64,97 @@ LOGLVL_COLORMAP = {
 
 class InstallPlugin(threading.Thread):
 
-    def __init__(self, config, session_id, plugin_key,  *args, **kwargs):
+    def __init__(self, config, plugin_key, repo_id, task_id, *args, **kwargs):
         self.config = config
         self.plugin_key = plugin_key
+        self.repo_id = repo_id
+        self.task_id = task_id
 
-        self.data_dir = os.path.expanduser(self.config['sourcelyzer.data_dir'])
+        self.data_dir = os.path.realpath(os.path.expanduser(self.config['sourcelyzer.data_dir']))
         self.plugin_dir = os.path.join(self.data_dir, 'plugins')
-        self.session_dir = os.path.join(self.data_dir, 'sessions')
-        self.session_id = session_id
+
+        threading.Thread.__init__(self, *args, **kwargs)
 
     def run(self, debug=False, colored=False):
 
-        logname = 'sl-install-plugin-%s' % self.ident
-        loglvl = logging.DEBUG if debug == True else logging.INFO
-        init_logger(logname, loglvl, colored)
-        logger = logging.getLogger(logname)
+        cherrypy.engine.publish('bg-noise', {
+            'state': 'started',
+            'msg': 'Starting install of plugin %s' % self.plugin_key,
+            'task': self.task_id
+        })
 
-        session_file = os.path.join(self.session_dir, 'session-%s' % self.session_id)
+        exitcode = 1
 
-        logger.debug('Data directory: %s' % self.data_dir)
-        logger.debug('Plugin directory: %s' % self.plugin_dir)
-        logger.debug('Session file: %s' % session_file)
+        with multiprocessing.Manager() as manager:
+            d = manager.dict() 
 
-        session_data, session_exp = pickle.load(open(session_file, 'rb'))
+            p = multiprocessing.Process(target=forked_run, args=(self.config, self.plugin_key, self.repo_id, d))
+            p.start()
+            pid = p.pid
+            cherrypy.engine.publish('bg-noise', {
+                'state': 'running',
+                'msg': 'Installation running',
+                'task': self.task_id,
+                'pid': pid
+            })
+            p.join()
 
-        if not os.path.exists(session_file):
-            logger.critical('Session file does not exist')
-            return
+            exitcode = d['exit-code']
 
-        if session_data['user']['auth'] != True or session_data['user']['token'] != args['--auth']:
-            logger.critical('Not Authenticated')
-            return
+        if exitcode == 0:
+            r = {
+                'state': 'finished',
+                'msg': 'Installation of plugin %s is complete' % self.plugin_key,
+                'task': self.task_id
+            }
+        elif exitcode == 1:
+            r = {
+                'state': 'error',
+                'msg': 'The installation failed. Please check the logs',
+                'task': self.task_id
+            }
+        elif exitcode == 2:
+            r = {
+                'state': 'error',
+                'msg': 'One of the repository files was corrupted. Check the logs for more information',
+                'task': self.task_id
+            }
+        elif exitcode == 3:
+            r = {
+                'state': 'error',
+                'msg': 'There was an error communicating with the repository.',
+                'task': self.task_id
+            }
+        elif exitcode == 4:
+            r = {
+                'state': 'error',
+                'msg': 'Plugin is already installed',
+                'task': self.task_id
+            }
+        elif exitcode == 5:
+            r = {
+                'state': 'error',
+                'msg': 'Plugin could not be found',
+                'task': self.task_id
+            }
+        else:
+            r = {
+                'state': 'error',
+                'msg': 'There was no exit code to check.',
+                'task': self.task_id
+            }
 
-        install_plugin(self.config, self.plugin_key)
+       
+        cherrypy.engine.publish('bg-noise', r)
+
+
+def forked_run(config, plugin_key, repo_id, managed_props):
+    """Use with multiprocessing.Process()
+    """
+
+    exit_code = install_plugin(config, plugin_key, repo_id)
+    managed_props['exit-code'] = exit_code
+    return exit_code
 
 
 def run(args):
@@ -98,6 +162,9 @@ def run(args):
 
     Takes output of docopt as input
     """
+
+    exit_code = 0
+
     loglvl = logging.DEBUG if args['--debug'] == True else logging.INFO
 
     init_logger('sourcelyzer', loglvl, not args['--no-color'])
@@ -120,22 +187,26 @@ def run(args):
 
     if not os.path.exists(session_file):
         logger.critical('Invalid session')
-        return
+        return 1
 
     session_data, session_exp = pickle.load(open(session_file, 'rb'))
 
     if session_data['user']['auth'] != True or session_data['user']['token'] != args['--auth']:
         logger.critical('Not Authenticated')
-        return
+        return 1
 
     plugin_key = PluginKey(args['--key'])
 
     logger.debug('Plugin Key: %s' % str(plugin_key))
 
+    repo_id = int(args['--repo-id'])
+
     if args['install'] == True:
-        install_plugin(config, plugin_key)
+        exit_code = install_plugin(config, plugin_key, repo_id)
     elif args['uninstall'] == True:
-        uninstall_plugin(config, plugin_key)
+        exit_code = uninstall_plugin(config, plugin_key)
+
+    return exit_code
 
 
 def get_url(url, stream=False):
@@ -227,13 +298,13 @@ def search_for_plugin(plugin_key, repos):
                 logger.warning('%s' % e)
                 continue
 
-            if plugin_key.plugin_type not in plugins:
-                raise UnknownPluginTypeError(plugin_key.plugin_type)
+            if plugin_key.plugin_group not in plugins:
+                raise UnknownPluginTypeError(plugin_key.plugin_group)
 
-            if plugin_key.plugin_name not in plugins[plugin_key.plugin_type]:
+            if plugin_key.plugin_name not in plugins[plugin_key.plugin_group]:
                 raise UnknownPluginError(plugin_name)
 
-            if plugin_key.plugin_version not in plugins[plugin_key.plugin_type][plugin_key.plugin_name]['versions']:
+            if plugin_key.plugin_version not in plugins[plugin_key.plugin_group][plugin_key.plugin_name]['versions']:
                 raise UnknownPluginVersionError('%s' % plugin_key)
 
             repo_url = repo.url
@@ -249,7 +320,8 @@ def uninstall_plugin(config, plugin_key, purge=False):
     logger = logging.getLogger('sourcelyzer')
     logger.info('Uninstalling %s' % str(plugin_key))
 
-    target_plugin_dir = os.path.join(config['sourcelyzer.plugin_dir'], '%s.%s' % (plugin_key.plugin_type, plugin_key.plugin_name))
+    data_dir = os.path.realpath(os.path.expanduser(config['sourcelyzer.data_dir']))
+    target_plugin_dir = os.path.join(data_dir, 'plugins', '%s.%s' % (plugin_key.plugin_group, plugin_key.plugin_name))
 
     logger.debug('Target plugin directory: %s' % target_plugin_dir)
 
@@ -260,31 +332,49 @@ def uninstall_plugin(config, plugin_key, purge=False):
 
     logger.info('%s uninstalled' % str(plugin_key))
 
-def get_installed_plugin(config, plugin_type, plugin_name):
-    plugin_dir = os.path.realpath(config['sourcelyzer.plugin_dir'])
-    target_plugin_dir = os.path.join(plugin_dir, '%s.%s' % (plugin_type, plugin_name))
+def get_installed_plugin(config, plugin_group, plugin_name):
+    logger = logging.getLogger('sourcelyzer')
+    data_dir = os.path.realpath(os.path.expanduser(config['sourcelyzer.data_dir']))
+    target_plugin_dir = os.path.join(data_dir, 'plugins', '%s.%s' % (plugin_group, plugin_name))
+
+    logger.debug('Checking %s' % target_plugin_dir)
 
     plugin_conf = configparser.ConfigParser()
     plugin_conf.read(os.path.join(target_plugin_dir, 'plugin.ini'))
 
-    return PluginKey('%s.%s-%s' % (plugin_type, plugin_name, plugin_conf['plugin']['version']))
+    return PluginKey('%s.%s-%s' % (plugin_group, plugin_name, plugin_conf['plugin']['version']))
 
-def is_plugin_installed(config, plugin_type, plugin_name):
-    plugin_dir = os.path.realpath(config['sourcelyzer.plugin_dir'])
-    target_plugin_dir = os.path.join(plugin_dir, '%s.%s' % (plugin_type, plugin_name))
+def is_plugin_installed(config, plugin_group, plugin_name):
+    data_dir = os.path.realpath(os.path.expanduser(config['sourcelyzer.data_dir']))
+    target_plugin_dir = os.path.join(data_dir, 'plugins', '%s.%s' % (plugin_group, plugin_name))
 
     return os.path.exists(target_plugin_dir)
 
+def check_for_installed_plugin(data_dir, plugin_key):
+    plugin_dir = os.path.join(data_dir, 'plugins', '%s.%s' % (plugin_key[0], plugin_key[1]))
 
-def install_plugin(config, plugin_key):
+    if os.path.exists(plugin_dir):
+        config = configparser.ConfigParser()
+        config.read(os.path.join(plugin_dir, 'plugin.ini'))
+
+        return PluginKey('%s.%s-%s' % (plugin_conf['plugin']['group'], plugin_conf['plugin']['name'], plugin_conf['version']))
+    else:
+        return None
+
+def install_plugin(config, plugin_key, repo_id):
+
+    plugin_key = PluginKey(str(plugin_key))
+
     logger = logging.getLogger('sourcelyzer')
     logger.info('Installing %s' % str(plugin_key))
     exit_code = 0
+    upgrade = False
+    downgrade = False
     try:
 
         data_dir = os.path.realpath(os.path.expanduser(config['sourcelyzer.data_dir']))
         plugins_dir = os.path.join(data_dir, 'plugins')
-        target_plugin_dir = os.path.join(plugins_dir, '%s.%s' % (plugin_key.plugin_type, plugin_key.plugin_name))
+        target_plugin_dir = os.path.join(plugins_dir, '%s.%s' % (plugin_key.plugin_group, plugin_key.plugin_name))
 
         logger.debug('Plugins directory: %s' % plugins_dir)
         logger.debug('Target plugin directory: %s' % target_plugin_dir)
@@ -293,56 +383,54 @@ def install_plugin(config, plugin_key):
 
         if os.path.exists(target_plugin_dir):
 
-            installed_key = get_installed_plugin(config, plugin_key.plugin_type, plugin_key.plugin_name)
+            installed_key = get_installed_plugin(config, plugin_key.plugin_group, plugin_key.plugin_name)
             if installed_key == plugin_key:
                 raise PluginAlreadyInstalledError('Plugin %s is already installed' % str(plugin_key))
-
+            elif semver.compare(installed_key[2], plugin_key[2]) == -1:
+                logger.warning('Downgraining from %s to %s' % (installed_key, plugin_key))
+                downgrade = True
+            elif semver.compare(installed_key[2], plugin_key[2]) == 1:
+                logger.warning('Upgrading from %s to %s' % (plugin_key, installed_key))
+                upgrade = True
+            
         engine = create_engine(config['sourcelyzer.db.uri'])
 
         Session = sessionmaker(bind=engine)
         session = Session()
 
-        records = session.query(PluginRepository).all()
+        repo = session.query(PluginRepository).filter(PluginRepository.id == repo_id).first()
 
-        repo_url = None
+        try:
 
-        for repo in records:
-
+            logger.info('Checking repository %s' % repo.url)
             try:
+                plugins = get_url(repo.url + '/plugins.json').json()
+            except (ConnectionError, HTTPError) as e:
+                logger.warning('%s' % e)
 
-                logger.info('Checking repository %s' % repo.url)
-                try:
-                    plugins = get_url(repo.url + '/plugins.json').json()
-                except (ConnectionError, HTTPError) as e:
-                    logger.warning('%s' % e)
-                    continue
+            if plugin_key.plugin_group not in plugins:
+                raise UnknownPluginTypeError(plugin_key.plugin_group)
 
-                if plugin_key.plugin_type not in plugins:
-                    raise UnknownPluginTypeError(plugin_key.plugin_type)
+            if plugin_key.plugin_name not in plugins[plugin_key.plugin_group]:
+                raise UnknownPluginError(plugin_key.plugin_name)
 
-                if plugin_key.plugin_name not in plugins[plugin_key.plugin_type]:
-                    raise UnknownPluginError(plugin_name)
+            if plugin_key.plugin_version not in plugins[plugin_key.plugin_group][plugin_key.plugin_name]['versions']:
+                raise UnknownPluginVersionError('%s' % plugin_key)
 
-                if plugin_key.plugin_version not in plugins[plugin_key.plugin_type][plugin_key.plugin_name]['versions']:
-                    raise UnknownPluginVersionError('%s' % plugin_key)
+            logger.info('Match!')
+            repo_url = repo.url
 
-                logger.info('Match!')
-                repo_url = repo.url
-                break
-
-            except (UnknownPluginTypeError, UnknownPluginError, UnknownPluginVersionError):
-                pass
-
-        session.close()
+        finally:
+            session.close()
 
 
         if not repo_url:
             raise UnknownPlugin('%s' % plugin_key)
 
-        if is_plugin_installed(config, plugin_key.plugin_type, plugin_key.plugin_name):
+        if is_plugin_installed(config, plugin_key.plugin_group, plugin_key.plugin_name):
             uninstall_plugin(config, plugin_key)
 
-        plugin_url = '%s/%s/%s/%s' % (repo_url, plugin_key.plugin_type, plugin_key.plugin_name, plugin_key.plugin_version)
+        plugin_url = '%s/%s/%s/%s' % (repo_url, plugin_key.plugin_group, plugin_key.plugin_name, plugin_key.plugin_version)
         plugin_metadata = get_plugin_metadata(plugin_url)
         plugin_zip = get_plugin_zip(plugin_url, target_plugin_dir, plugin_key)
 
@@ -370,6 +458,30 @@ def install_plugin(config, plugin_key):
         with zipfile.ZipFile(dest_zip) as pz:
             pz.extractall(target_plugin_dir)
 
+        logger.info('Creating database record')
+
+        if upgrade == True or downgrade == True:
+            plugin = session.query(Plugin).filter(Plugin.key == str(installed_key)).first()
+            if not plugin:
+                logger.warning('Expected to find plugin in database for upgrade/downgrade: %s' % str(plugin_key))
+                plugin = Plugin()
+        else:
+            plugin = Plugin()
+
+
+        plugin.name = plugin_key.plugin_name
+        plugin.group = plugin_key.plugin_group
+        plugin.version = plugin_key.plugin_version
+        plugin.key = str(plugin_key)
+        plugin.installed = True
+        plugin.enabled = True
+
+        
+        if upgrade == False and downgrade == False:
+            session.add(plugin)
+
+        session.commit()
+
         logger.info('Plugin %s has been successfully instaled' % str(plugin_key))
     except (UnknownPluginError, UnknownPluginError, UnknownPluginTypeError, UnknownPluginVersionError):
         logger.error('Plugin %s could not be found' % str(plugin_key))
@@ -383,10 +495,15 @@ def install_plugin(config, plugin_key):
     except InvalidHashError as e:
         logger.error('%s' % e)
         exit_code = 2
+    except Exception as e:
+        logger.critical('Unhandled Exception')
+        logger.critical(type(e).__name__ + ': ' + e.message)
+        logger.exception(e)
+        exit_code = 1
 
     return exit_code
 
 
 if __name__ == '__main__':
-    run(docopt(__doc__))
+    sys.exit(run(docopt(__doc__)))
 

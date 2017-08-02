@@ -1,5 +1,8 @@
 from sourcelyzer.rest.v1.base import RESTResource
 from sourcelyzer.rest.tools import RequireAuthentication
+from sourcelyzer.cli.apps.plugins import InstallPlugin
+
+from random import randint
 import cherrypy
 import os
 import zipfile
@@ -9,9 +12,22 @@ import glob
 
 class Plugins():
 
+    def __init__(self, config):
+        self.config = config
+
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @RequireAuthentication
+    def install(self, key, repo):
+
+        task_id = randint(0,99999)
+        thread = InstallPlugin(self.config, key, int(repo), task_id)
+        thread.start()
+        return {
+            'task-id': task_id
+        }
+
     def default(self, *vpath, **params):
         plugins = cherrypy.engine.publish('get-plugins').pop()
         cherrypy.response.headers['Content-Type'] = 'application/json'

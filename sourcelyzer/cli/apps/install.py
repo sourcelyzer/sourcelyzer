@@ -1,7 +1,7 @@
 from sourcelyzer.properties import load_from_file
 from sourcelyzer.cli import outnl, ask_yesno, ask_generic
 from sourcelyzer.dao import Base, User, Settings, PluginRepository
-from sourcelyzer.utils import user as userutils
+from sourcelyzer.utils import hashing as hashutils
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -82,7 +82,7 @@ any necessary secret tokens.
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    admin_dao = User(username=admin_user, password=userutils.gen_passwd_hash(admin_password), email=admin_email, is_admin=True)
+    admin_dao = User(username=admin_user, password=hashutils.gen_passwd_hash(admin_password), email=admin_email, is_admin=True)
     session.add(admin_dao)
 
     outnl('Creating secrets')

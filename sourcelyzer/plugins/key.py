@@ -2,11 +2,11 @@ class PluginKey(tuple):
 
     def __new__(cls, key):
         plugin_version = '-'.join(key.split('-')[1:])
-        plugin_type, plugin_name = key.split('-')[0].split('.')
-        return tuple.__new__(cls, (plugin_type, plugin_name, plugin_version))
+        plugin_group, plugin_name = key.split('-')[0].split('.')
+        return tuple.__new__(cls, (plugin_group, plugin_name, plugin_version))
 
     @property
-    def plugin_type(self):
+    def plugin_group(self):
         return self[0]
 
     @property
@@ -18,7 +18,7 @@ class PluginKey(tuple):
         return self[2]
 
     def __eq__(self, other):
-        if other.plugin_type != self.plugin_type:
+        if other.plugin_group != self.plugin_group:
             return False
 
         if other.plugin_name != self.plugin_name:
@@ -30,7 +30,7 @@ class PluginKey(tuple):
         return True
 
     def __str__(self):
-        return "%s.%s-%s" % (self.plugin_type, self.plugin_name, self.plugin_version)
+        return "%s.%s-%s" % (self.plugin_group, self.plugin_name, self.plugin_version)
 
     def __setattr__(self, *ignored):
         raise NotImplementedError

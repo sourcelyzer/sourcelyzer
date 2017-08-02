@@ -22,6 +22,15 @@ from sourcelyzer.dao import User, PluginRepository
 
 import requests
 
+from ws4py.server.cherrypyserver import WebSocketPlugin, WebSocketTool
+from ws4py.websocket import EchoWebSocket, WebSocket
+
+from collections import deque
+try:
+    import simplejson as json
+except ImportError:
+    import json
+
 def refresh_plugins(dbsession):
 
     try:
@@ -33,6 +42,41 @@ def refresh_plugins(dbsession):
     finally:
         dbsession.close()
  
+
+class PidReader(WebSocket):
+
+    def __init__(self, *args, **kwargs):
+        WebSocket.__init__(self, *args, **kwargs)
+        self.messages = deque([])
+        self.broadcast = False
+
+    def get_message(self, packet):
+
+        self.messages.append(packet)
+
+        while self.messages:
+            msg = self.messages.popleft()
+            if msg != None:
+                self.send(json.dumps(msg))
+
+    def received_message(self, msg):
+
+        cmd = json.loads(msg.data.decode('utf-8'));
+
+        if cmd['cmd'] == 'bg-listen':
+            
+            self.send('Listening to the background noises')
+            cherrypy.engine.subscribe('bg-noise', self.get_message)
+
+    
+class WsHandler(object):
+    @cherrypy.expose
+    def index(self, **params):
+        cherrypy.engine.publish('task-%s' % params.get('pid'), params.get('msg'), params.get('pid'))
+
+    @cherrypy.expose
+    def ws(self):
+        pass
 
 
 class ServerThread(threading.Thread):
@@ -60,6 +104,9 @@ class ServerThread(threading.Thread):
         # PluginLoaderPlugin(cherrypy.engine, self._config['sourcelyzer.plugin_dir']).subscribe()
  #        SAPlugin(cherrypy.engine, self._config['sourcelyzer.db.uri']).subscribe()
 
+        WebSocketPlugin(cherrypy.engine).subscribe()
+        cherrypy.tools.websocket = WebSocketTool()
+
         cherrypy.tools.db = SATool(dburi=self._config['sourcelyzer.db.uri'])
 
         # refresh_plugins(cherrypy.tools.db.session())
@@ -82,6 +129,10 @@ class ServerThread(threading.Thread):
 
 
 
+        cherrypy.tree.mount(WsHandler(), '/ws', {'/ws': {
+            'tools.websocket.on': True,
+            'tools.websocket.handler_cls': PidReader
+            }})
 
         """
         cherrypy.tree.mount(HomePage(), '/', {'/': {
@@ -100,7 +151,7 @@ class ServerThread(threading.Thread):
         cherrypy.tree.mount(UserResource(), '/api/users', {'/': {
         }})
         """
-        cherrypy.tree.mount(PluginsResource(), '/rest/v1/plugins')
+        cherrypy.tree.mount(PluginsResource(config=self._config), '/rest/v1/plugins')
 
         cherrypy.tree.mount(LoginCommand(User), '/rest/v1/commands/authenticate', {'/login': {
             'error_page.default': json_error_output
