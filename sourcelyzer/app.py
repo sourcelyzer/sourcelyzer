@@ -15,7 +15,7 @@ from sourcelyzer.httpapi.tools import SATool
 
 from sourcelyzer.httpapi.v1.resources.user import UserResource
 from sourcelyzer.httpapi.v1.resources.project import ProjectResource
-from sourcelyzer.httpapi.v1.commands import LoginCommand
+from sourcelyzer.httpapi.v1.commands import LoginCommand, SessionCommand
 from sourcelyzer.httpapi.v1.plugins import Plugins as PluginsResource
 
 from sourcelyzer.dao import User, PluginRepository
@@ -154,6 +154,10 @@ class ServerThread(threading.Thread):
         cherrypy.tree.mount(PluginsResource(config=self._config), '/httpapi/v1/plugins')
 
         cherrypy.tree.mount(LoginCommand(User), '/httpapi/v1/commands/authenticate', {'/login': {
+            'error_page.default': json_error_output
+        }})
+
+        cherrypy.tree.mount(SessionCommand(User), '/httpapi/v1/commands/session', {'/': {
             'error_page.default': json_error_output
         }})
 

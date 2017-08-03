@@ -42,11 +42,16 @@ class LoginCommand(Command):
         self.user = user
 
     @cherrypy.tools.json_out()
+    @cherrypy.tools.json_in()
     @cherrypy.expose
-    def default(self, username, password):
+    def default(self):
         if cherrypy.request.method != 'POST':
             cherrypy.response.headers['Allow'] = 'POST'
             raise cherrypy.HTTPError(405)
+
+        data = cherrypy.request.json
+        username = data['username']
+        password = data['password']
 
         db = cherrypy.request.db
 

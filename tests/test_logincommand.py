@@ -87,9 +87,16 @@ class LoginCommandTest(helper.CPWebCase):
 
     def test_good_login(self):
 
+        body = json.dumps({'username': 'test1', 'password': 'test1pw'})
+
+        headers = [
+            ('Content-Type', 'application/json'),
+            ('Content-Length', str(len(body)))
+        ]
+
         cherrypy.session = RamSession()
 
-        self.getPage('/login', method='POST', body='username=test1&password=test1pw')
+        self.getPage('/login', method='POST', body=body, headers=headers)
         pprint(json.loads(self.body))
         self.assertStatus(200)
 
@@ -129,11 +136,25 @@ class LoginCommandTest(helper.CPWebCase):
 
 
     def test_bad_password(self):
-        self.getPage('/login', method='POST', body='username=test1&password=bad_pw')
+        body = json.dumps({'username': 'test1', 'password': 'bad_pw'})
+
+        headers = [
+            ('Content-Type', 'application/json'),
+            ('Content-Length', str(len(body)))
+        ]
+
+        self.getPage('/login', method='POST', body=body, headers=headers)
         pprint(json.loads(self.body))
         self.assertStatus(401)
 
     def test_bad_username(self):
-        self.getPage('/login', method='POST', body='username=bad_user&password=test1pw')
+        body = json.dumps({'username': 'bad_user', 'password': 'test1pw'})
+
+        headers = [
+            ('Content-Type', 'application/json'),
+            ('Content-Length', str(len(body)))
+        ]
+
+        self.getPage('/login', method='POST', body=body, headers=headers)
         self.assertStatus(401)
 
